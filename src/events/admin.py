@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Place, Event
+
+from .models import Event, Place
 
 
 class PlaceAdmin(admin.ModelAdmin):

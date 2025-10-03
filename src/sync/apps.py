@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class EventsConfig(AppConfig):
+class SyncConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "src.events"
-    verbose_name = "Events"
+    name = "src.sync"
+    verbose_name = "Synchronization"

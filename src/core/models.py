@@ -1,5 +1,7 @@
 import uuid
+
 import django.db.models
+
 
 class BaseModel(django.db.models.Model):
     id = django.db.models.UUIDField(
@@ -16,6 +18,5 @@ class BaseModel(django.db.models.Model):
         auto_now_add=True,
     )
 
-
-    class Meta():
+    class Meta:
         abstract = True
