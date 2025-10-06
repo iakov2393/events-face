@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import SyncResult, SyncSettings
+from .models import OutboxMessage, SyncResult, SyncSettings
 
 
 class SyncResultAdmin(admin.ModelAdmin):
@@ -18,5 +18,13 @@ class SyncSettingsAdmin(admin.ModelAdmin):
     list_display = ["key", "value"]
 
 
+class OutboxMessageAdmin(admin.ModelAdmin):
+    list_display = ["topic", "created_at", "sent", "sent_at"]
+    list_filter = ["sent", "topic", "created_at"]
+    search_fields = ["topic", "payload"]
+    readonly_fields = ["created_at"]
+
+
 admin.site.register(SyncResult)
 admin.site.register(SyncSettings)
+admin.site.register(OutboxMessage)

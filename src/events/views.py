@@ -1,6 +1,9 @@
+from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from src.sync.outbox_services import OutboxService
 
 from .models import Event, Place
 
@@ -34,46 +37,6 @@ def event_list_protected(request):
     )
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def create_event(request):
-    """
-    Защищенный эндпоинт для создания нового события
-    Требует валидный Access Token
-    """
-    name = request.data.get("name")
-    event_date = request.data.get("event_date")
-    place_id = request.data.get("place_id")
-
-    if not name or not event_date:
-        return Response({"error": "Name and event_date are required"}, status=400)
-
-    try:
-        place = None
-        if place_id:
-            place = Place.objects.get(id=place_id)
-
-        event = Event.objects.create(name=name, event_date=event_date, place=place)
-
-        return Response(
-            {
-                "event": {
-                    "id": str(event.id),
-                    "name": event.name,
-                    "event_date": event.event_date,
-                    "status": event.status,
-                    "place": event.place.name if event.place else None,
-                }
-            },
-            status=201,
-        )
-
-    except Place.DoesNotExist:
-        return Response({"error": "Place not found"}, status=404)
-    except Exception as e:
-        return Response({"error": str(e)}, status=400)
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def event_detail(request, event_id):
@@ -99,3 +62,46 @@ def event_detail(request, event_id):
 
     except Event.DoesNotExist:
         return Response({"error": "Event not found"}, status=404)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_event(request):
+    """
+    Защищенный эндпоинт для создания нового события с outbox
+    """
+    name = request.data.get("name")
+    event_date = request.data.get("event_date")
+    place_id = request.data.get("place_id")
+
+    if not name or not event_date:
+        return Response({"error": "Name and event date are required"}, status=400)
+
+    try:
+        with transaction.atomic():
+            place = None
+            if place_id:
+                place = Place.objects.get(id=place_id)
+
+            event = Event.objects.create(name=name, event_date=event_date, place=place)
+
+            OutboxService().create_event_created_message(event)
+
+            return Response(
+                {
+                    "message": "Event created successfully",
+                    "event": {
+                        "id": str(event.id),
+                        "name": event.name,
+                        "event_date": event.event_date,
+                        "status": event.status,
+                        "place": event.place.name if event.place else None,
+                    },
+                },
+                status=201,
+            )
+
+    except Place.DoesNotExist:
+        return Response({"error": "Place not found"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)

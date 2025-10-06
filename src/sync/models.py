@@ -40,3 +40,21 @@ class SyncSettings(models.Model):
 
     def __str__(self):
         return self.key
+
+
+class OutboxMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    topic = models.CharField(max_length=255, verbose_name="Topic")
+    payload = models.JSONField(verbose_name="Payload")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created at")
+    sent = models.BooleanField(default=False, verbose_name="Sent")
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name="Sent at")
+
+    class Meta:
+        verbose_name = "Outbox Message"
+        verbose_name_plural = "Outbox Messages"
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["sent", "created_at"])]
+
+    def __str__(self):
+        return f"{self.topic} - {self.created_at}"
