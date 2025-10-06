@@ -42,9 +42,10 @@ class OutboxWorker:
         Обработка батча сообщений
         """
         with transaction.atomic():
-            # Теперь используем поле sent
             messages = (
-                OutboxMessage.objects.filter(sent=False)
+                OutboxMessage.objects.filter(
+                    sent=False  # Используем существующее поле sent
+                )
                 .select_for_update(skip_locked=True)
                 .order_by("created_at")[: self.batch_size]
             )

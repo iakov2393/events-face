@@ -33,6 +33,7 @@ class SyncSettings(models.Model):
     description = models.TextField(blank=True, verbose_name="Description")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated at")
+    sent = models.BooleanField(default=False, verbose_name="Sent")
 
     class Meta:
         verbose_name = "Sync Setting"
