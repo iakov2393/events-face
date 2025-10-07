@@ -1,5 +1,6 @@
 import logging
 import signal
+
 from django.core.management.base import BaseCommand
 
 from src.sync.outbox_services import MockMessageProducer
@@ -31,7 +32,7 @@ class Command(BaseCommand):
         worker = OutboxWorker(
             producer=MockMessageProducer(),
             batch_size=options["batch_size"],
-            poll_interval=options["poll_interval"]
+            poll_interval=options["poll_interval"],
         )
 
         def signal_handler(signum, frame):

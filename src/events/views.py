@@ -1,12 +1,13 @@
 from django.db import transaction
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
 
 from src.sync.outbox_services import OutboxService
-from .models import Event, Place
-from .serializers import EventSerializer, EventListSerializer, EventDetailSerializer
+
+from .models import Event
+from .serializers import EventDetailSerializer, EventListSerializer, EventSerializer
 
 
 @api_view(["GET"])
@@ -19,10 +20,7 @@ def event_list_protected(request):
     events = Event.objects.select_related("place").all()
     serializer = EventListSerializer(events, many=True)
 
-    return Response({
-        "events": serializer.data,
-        "count": len(serializer.data)
-    })
+    return Response({"events": serializer.data, "count": len(serializer.data)})
 
 
 @api_view(["GET"])
@@ -35,15 +33,10 @@ def event_detail(request, event_id):
         event = Event.objects.select_related("place").get(id=event_id)
         serializer = EventDetailSerializer(event)
 
-        return Response({
-            "event": serializer.data
-        })
+        return Response({"event": serializer.data})
 
     except Event.DoesNotExist:
-        return Response(
-            {"error": "Event not found"},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(["POST"])
@@ -56,8 +49,7 @@ def create_event(request):
 
     if not serializer.is_valid():
         return Response(
-            {"errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
+            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
         )
 
     try:
@@ -68,15 +60,14 @@ def create_event(request):
             return Response(
                 {
                     "message": "Event created successfully",
-                    "event": EventSerializer(event).data
+                    "event": EventSerializer(event).data,
                 },
                 status=status.HTTP_201_CREATED,
             )
 
-    except Exception as e:
+    except Exception:
         return Response(
-            {"error": "Failed to create event"},
-            status=status.HTTP_400_BAD_REQUEST
+            {"error": "Failed to create event"}, status=status.HTTP_400_BAD_REQUEST
         )
 
 
@@ -89,17 +80,13 @@ def update_event(request, event_id):
     try:
         event = Event.objects.get(id=event_id)
     except Event.DoesNotExist:
-        return Response(
-            {"error": "Event not found"},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
 
     serializer = EventSerializer(event, data=request.data, partial=True)
 
     if not serializer.is_valid():
         return Response(
-            {"errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
+            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
         )
 
     try:
@@ -107,13 +94,14 @@ def update_event(request, event_id):
             updated_event = serializer.save()
             OutboxService().create_event_updated_message(updated_event)
 
-            return Response({
-                "message": "Event updated successfully",
-                "event": EventSerializer(updated_event).data
-            })
+            return Response(
+                {
+                    "message": "Event updated successfully",
+                    "event": EventSerializer(updated_event).data,
+                }
+            )
 
-    except Exception as e:
+    except Exception:
         return Response(
-            {"error": "Failed to update event"},
-            status=status.HTTP_400_BAD_REQUEST
+            {"error": "Failed to update event"}, status=status.HTTP_400_BAD_REQUEST
         )

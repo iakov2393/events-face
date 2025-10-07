@@ -1,5 +1,6 @@
 import logging
 import uuid
+
 from django.utils import timezone
 
 from .models import OutboxMessage
@@ -17,10 +18,7 @@ class OutboxService:
         Create message in outbox
         """
         message = OutboxMessage.objects.create(
-            id=uuid.uuid4(),
-            topic=topic,
-            payload=payload,
-            sent=False
+            id=uuid.uuid4(), topic=topic, payload=payload, sent=False
         )
         logger.debug("Created outbox message %s", message.id)
         return message
@@ -69,7 +67,7 @@ class OutboxService:
         """
         Safely convert date to ISO format string
         """
-        if hasattr(date_value, 'isoformat'):
+        if hasattr(date_value, "isoformat"):
             return date_value.isoformat()
         return str(date_value)
 
@@ -77,7 +75,9 @@ class OutboxService:
         """
         Get unsent messages from outbox
         """
-        return OutboxMessage.objects.filter(sent=False).order_by("created_at")[:batch_size]
+        return OutboxMessage.objects.filter(sent=False).order_by("created_at")[
+            :batch_size
+        ]
 
     def mark_as_sent(self, message):
         """
@@ -119,10 +119,10 @@ class OutboxService:
         failed = OutboxMessage.objects.filter(sent=False, retry_count__gte=3).count()
 
         return {
-            'total_messages': total,
-            'sent_messages': sent,
-            'pending_messages': pending,
-            'failed_messages': failed
+            "total_messages": total,
+            "sent_messages": sent,
+            "pending_messages": pending,
+            "failed_messages": failed,
         }
 
 
