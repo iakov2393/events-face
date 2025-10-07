@@ -1,6 +1,5 @@
 import logging
 import uuid
-
 from django.utils import timezone
 
 from .models import OutboxMessage
@@ -9,61 +8,80 @@ logger = logging.getLogger(__name__)
 
 
 class OutboxService:
+    """
+    Service for working with transactional outbox pattern
+    """
+
     def create_message(self, topic, payload):
         """
-        Создание сообщения в outbox
+        Create message in outbox
         """
-        return OutboxMessage.objects.create(
-            id=uuid.uuid4(), topic=topic, payload=payload, sent=False
+        message = OutboxMessage.objects.create(
+            id=uuid.uuid4(),
+            topic=topic,
+            payload=payload,
+            sent=False
         )
+        logger.debug("Created outbox message %s", message.id)
+        return message
 
     def create_event_created_message(self, event):
         """
-        Создание сообщения о создании мероприятия
+        Create message for event creation
         """
         payload = {
             "message_id": str(uuid.uuid4()),
             "event_id": str(event.id),
             "event_name": event.name,
-            "event_date": event.event_date.isoformat(),
+            "event_date": self._safe_isoformat(event.event_date),
             "status": event.status,
             "place_id": str(event.place.id) if event.place else None,
             "place_name": event.place.name if event.place else None,
-            "created_at": event.created_at.isoformat(),
+            "created_at": self._safe_isoformat(event.created_at),
             "action": "event_created",
         }
 
-        return self.create_message("events", payload)
+        message = self.create_message("events", payload)
+        logger.info("Created event_created message for event %s", event.id)
+        return message
 
     def create_event_updated_message(self, event):
         """
-        Создание сообщения об обновлении мероприятия
+        Create message for event update
         """
         payload = {
             "message_id": str(uuid.uuid4()),
             "event_id": str(event.id),
             "event_name": event.name,
-            "event_date": event.event_date.isoformat(),
+            "event_date": self._safe_isoformat(event.event_date),
             "status": event.status,
             "place_id": str(event.place.id) if event.place else None,
             "place_name": event.place.name if event.place else None,
-            "updated_at": event.updated_at.isoformat(),
+            "updated_at": self._safe_isoformat(event.updated_at),
             "action": "event_updated",
         }
 
-        return self.create_message("events", payload)
+        message = self.create_message("events", payload)
+        logger.info("Created event_updated message for event %s", event.id)
+        return message
+
+    def _safe_isoformat(self, date_value):
+        """
+        Safely convert date to ISO format string
+        """
+        if hasattr(date_value, 'isoformat'):
+            return date_value.isoformat()
+        return str(date_value)
 
     def get_pending_messages(self, batch_size=100):
         """
-        Получение непрочитанных сообщений
+        Get unsent messages from outbox
         """
-        return OutboxMessage.objects.filter(sent=False).order_by("created_at")[
-            :batch_size
-        ]
+        return OutboxMessage.objects.filter(sent=False).order_by("created_at")[:batch_size]
 
     def mark_as_sent(self, message):
         """
-        Пометка сообщения как отправленного
+        Mark message as sent
         """
         message.sent = True
         message.sent_at = timezone.now()
@@ -71,33 +89,51 @@ class OutboxService:
 
     def process_pending_messages(self, batch_size=100):
         """
-        Обработка непрочитанных сообщений
+        Process pending outbox messages
         """
         producer = MockMessageProducer()
         messages = self.get_pending_messages(batch_size)
+        processed_count = 0
 
         for message in messages:
             try:
                 success = producer.send_message(message.topic, message.payload)
                 if success:
                     self.mark_as_sent(message)
-                    logger.info(f"OUTBOX: Message {message.id} sent successfully")
+                    processed_count += 1
+                    logger.info("Message %s sent successfully", message.id)
                 else:
-                    logger.error(f"OUTBOX: Failed to send message {message.id}")
+                    logger.error("Failed to send message %s", message.id)
             except Exception as e:
-                logger.error(f"OUTBOX: Error sending message {message.id}: {str(e)}")
+                logger.error("Error sending message %s: %s", message.id, str(e))
 
-        return len(messages)
+        return processed_count
+
+    def get_outbox_stats(self):
+        """
+        Get outbox statistics
+        """
+        total = OutboxMessage.objects.count()
+        sent = OutboxMessage.objects.filter(sent=True).count()
+        pending = OutboxMessage.objects.filter(sent=False).count()
+        failed = OutboxMessage.objects.filter(sent=False, retry_count__gte=3).count()
+
+        return {
+            'total_messages': total,
+            'sent_messages': sent,
+            'pending_messages': pending,
+            'failed_messages': failed
+        }
 
 
 class MockMessageProducer:
     """
-    Mock продюсер - вместо реальной отправки в Kafka/RabbitMQ
+    Mock producer for message sending (instead of real Kafka/RabbitMQ)
     """
 
     def send_message(self, topic, payload):
         """
-        Вместо реальной отправки - просто логируем
+        Mock message sending - just log instead of real delivery
         """
-        logger.info(f"OUTBOX: Message would be sent to '{topic}': {payload}")
+        logger.info("Message would be sent to '%s': %s", topic, payload)
         return True

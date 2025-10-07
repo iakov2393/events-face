@@ -50,12 +50,20 @@ class OutboxMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created at")
     sent = models.BooleanField(default=False, verbose_name="Sent")
     sent_at = models.DateTimeField(null=True, blank=True, verbose_name="Sent at")
+    retry_count = models.PositiveIntegerField(default=0, verbose_name="Retry Count")
+    last_retry_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Last Retry At"
+    )
+    error_message = models.TextField(blank=True, verbose_name="Error Message")
 
     class Meta:
         verbose_name = "Outbox Message"
         verbose_name_plural = "Outbox Messages"
         ordering = ["created_at"]
-        indexes = [models.Index(fields=["sent", "created_at"])]
+        indexes = [
+            models.Index(fields=["sent", "created_at"]),
+            models.Index(fields=["retry_count", "created_at"]),
+        ]
 
     def __str__(self):
         return f"{self.topic} - {self.created_at}"

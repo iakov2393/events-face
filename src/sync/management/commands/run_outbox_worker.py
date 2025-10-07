@@ -1,6 +1,5 @@
 import logging
 import signal
-
 from django.core.management.base import BaseCommand
 
 from src.sync.outbox_services import MockMessageProducer
@@ -19,12 +18,20 @@ class Command(BaseCommand):
             default=100,
             help="Number of messages to process in one batch",
         )
+        parser.add_argument(
+            "--poll-interval",
+            type=float,
+            default=1.0,
+            help="Sleep interval between batches in seconds",
+        )
 
     def handle(self, *args, **options):
         self.stdout.write("Starting outbox worker...")
 
         worker = OutboxWorker(
-            producer=MockMessageProducer(), batch_size=options["batch_size"]
+            producer=MockMessageProducer(),
+            batch_size=options["batch_size"],
+            poll_interval=options["poll_interval"]
         )
 
         def signal_handler(signum, frame):
@@ -39,4 +46,5 @@ class Command(BaseCommand):
         except KeyboardInterrupt:
             self.stdout.write("Outbox worker stopped by user")
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Outbox worker error: {e}"))
+            logger.error("Outbox worker error: %s", e)
+            raise

@@ -22,4 +22,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("src.events.auth_app.urls")),
     path("api/events/", include("src.events.urls")),
+    path("sync/", include("src.sync.urls")),
 ]

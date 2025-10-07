@@ -2,106 +2,118 @@ from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import status
 
 from src.sync.outbox_services import OutboxService
-
 from .models import Event, Place
+from .serializers import EventSerializer, EventListSerializer, EventDetailSerializer
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def event_list_protected(request):
     """
-    Защищенный эндпоинт для получения списка событий
-    Требует валидный Access Token в заголовке Authorization
+    Protected endpoint for retrieving events list
+    Requires valid Access Token in Authorization header
     """
     events = Event.objects.select_related("place").all()
+    serializer = EventListSerializer(events, many=True)
 
-    event_data = [
-        {
-            "id": str(event.id),
-            "name": event.name,
-            "status": event.status,
-            "place": event.place.name if event.place else None,
-            "created_at": event.created_at,
-        }
-        for event in events
-    ]
-
-    return Response(
-        {
-            "events": event_data,
-            "count": len(event_data),
-            "message": "Successfully retrieved events list",
-        }
-    )
+    return Response({
+        "events": serializer.data,
+        "count": len(serializer.data)
+    })
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def event_detail(request, event_id):
     """
-    Защищенный эндпоинт для получения деталей события
+    Protected endpoint for retrieving event details
     """
     try:
         event = Event.objects.select_related("place").get(id=event_id)
+        serializer = EventDetailSerializer(event)
 
-        return Response(
-            {
-                "event": {
-                    "id": str(event.id),
-                    "name": event.name,
-                    "event_date": event.event_date,
-                    "status": event.status,
-                    "place": event.place.name if event.place else None,
-                    "created_at": event.created_at,
-                    "update_at": event.updated_at,
-                }
-            }
-        )
+        return Response({
+            "event": serializer.data
+        })
 
     except Event.DoesNotExist:
-        return Response({"error": "Event not found"}, status=404)
+        return Response(
+            {"error": "Event not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_event(request):
     """
-    Защищенный эндпоинт для создания нового события с outbox
+    Protected endpoint for creating new event with outbox
     """
-    name = request.data.get("name")
-    event_date = request.data.get("event_date")
-    place_id = request.data.get("place_id")
+    serializer = EventSerializer(data=request.data)
 
-    if not name or not event_date:
-        return Response({"error": "Name and event date are required"}, status=400)
+    if not serializer.is_valid():
+        return Response(
+            {"errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
         with transaction.atomic():
-            place = None
-            if place_id:
-                place = Place.objects.get(id=place_id)
-
-            event = Event.objects.create(name=name, event_date=event_date, place=place)
-
+            event = serializer.save()
             OutboxService().create_event_created_message(event)
 
             return Response(
                 {
                     "message": "Event created successfully",
-                    "event": {
-                        "id": str(event.id),
-                        "name": event.name,
-                        "event_date": event.event_date,
-                        "status": event.status,
-                        "place": event.place.name if event.place else None,
-                    },
+                    "event": EventSerializer(event).data
                 },
-                status=201,
+                status=status.HTTP_201_CREATED,
             )
 
-    except Place.DoesNotExist:
-        return Response({"error": "Place not found"}, status=404)
     except Exception as e:
-        return Response({"error": str(e)}, status=400)
+        return Response(
+            {"error": "Failed to create event"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def update_event(request, event_id):
+    """
+    Protected endpoint for updating event with outbox
+    """
+    try:
+        event = Event.objects.get(id=event_id)
+    except Event.DoesNotExist:
+        return Response(
+            {"error": "Event not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    serializer = EventSerializer(event, data=request.data, partial=True)
+
+    if not serializer.is_valid():
+        return Response(
+            {"errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        with transaction.atomic():
+            updated_event = serializer.save()
+            OutboxService().create_event_updated_message(updated_event)
+
+            return Response({
+                "message": "Event updated successfully",
+                "event": EventSerializer(updated_event).data
+            })
+
+    except Exception as e:
+        return Response(
+            {"error": "Failed to update event"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
